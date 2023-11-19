@@ -51,7 +51,7 @@ from .configuration_gpt2 import GPT2Config
 
 logger = logging.get_logger(__name__)
 #TODO: parameters for #layer and #example
-NUM_LAYER = 12
+NUM_LAYER = 24
 NUM_EXAM = 2
 
 _CHECKPOINT_FOR_DOC = "gpt2"
@@ -324,29 +324,41 @@ class GPT2Attention(nn.Module):
         key = self._split_heads(key, self.num_heads, self.head_dim)
         value = self._split_heads(value, self.num_heads, self.head_dim)
         #TODO: print activation
+        #every NUM_LAYER is one foward path of the transformer model
         if len(self.key_list[self.num_example_attn]) == NUM_LAYER:
             self.num_example_attn += 1
             self.key_list.append([])
             self.value_list.append([])
+
+        #append this layer's value to the value_list [1, num_heads, seq_length, d_heads]
         self.key_list[self.num_example_attn].append(key)
         self.value_list[self.num_example_attn].append(value)
-        if self.num_example_attn == 1 and len(self.value_list[self.num_example_attn]) == NUM_LAYER: #change teh example and the size of the gpt model
+
+        #change the example and the size of the gpt model [value vector is more important]
+        if self.num_example_attn == 1 and len(self.value_list[self.num_example_attn]) == NUM_LAYER:
+            # breakpoint()
             res = [ele for ele in self.value_list if ele != []]
-            for j in range(6,10): # different layer: you can change the layer here
-                # sum = 0
-                # for i in range(0): #different example
-                #     #breakpoint()
-                    for t in range(0,5): # different head: you can change the head here
-                       ts.save(res[0][j][0][t], './visualized_value/test_value_layer' + str(j) + '_head_' + str(t) + '.jpg')
-                    
-                    #sum += res[i][j]
-                    # print(res[i][j])
-                    # print('/n')
-        if self.num_example_attn == 1 and len(self.key_list[self.num_example_attn]) == NUM_LAYER: #change teh example and the size of the gpt model
-            res = [ele for ele in self.value_list if ele != []]
-            for j in range(6,10): # different layer
-                    for t in range(0,5): # different head
-                        ts.save(res[0][j][0][t], './visualized_key/test_value_layer' +str(j)+'_head_'+str(t) +'.jpg')
+            #res[num_example][layer] = value  [1, num_heads,seq_length, d_heads]
+            for layer in range(6,10): # different layer: you can change the layer here
+                for head in range(0,5): # different head: you can change the head here
+                    ts.save(res[0][layer][0][head], './test_visualized_value/test_value_layer' + str(layer) + '_head_' + str(head) + '.jpg')
+            #output: every seq tokn and every heads' feature pay attention to 
+
+            #avg over head, one layers over all heads --> for each layer, avg heads feature over heads on seq
+            for layer in range(6,10): # d
+                ts.save(res[0][layer][0].mean(dim=0), './test_visualized_value/test_value_layer' + str(layer) +  '_avg.jpg')
+            #avg over all head feature and all heads --> layer / seq
+            #[num_layer, heads, seq, heads_features]
+            all_layer = torch.stack(res[0]).squeeze(dim = 1) 
+            ts.save(all_layer.mean(dim=-1).mean(dim=1),'./test_visualized_value/total_valus.jpg' )
+
+
+            
+        # if self.num_example_attn == 1 and len(self.key_list[self.num_example_attn]) == NUM_LAYER: #change teh example and the size of the gpt model
+        #     res = [ele for ele in self.value_list if ele != []]
+        #     for j in range(6,10): # different layer
+        #             for t in range(0,5): # different head
+        #                 ts.save(res[0][j][0][t], './visualized_key/test_value_layer' +str(j)+'_head_'+str(t) +'.jpg')
 
 
         
@@ -363,7 +375,7 @@ class GPT2Attention(nn.Module):
         if self.reorder_and_upcast_attn:
             attn_output, attn_weights = self._upcast_and_reordered_attn(query, key, value, attention_mask, head_mask)
         else:
-            attn_output, attn_weights = self.attention(query, key, value, attention_mask, head_mask)
+            attn_output, attn_weights = self._attn(query, key, value, attention_mask, head_mask)
         attn_output = self._merge_heads(attn_output, self.num_heads, self.head_dim)
         #FIXME:
         #breakpoint()
@@ -392,32 +404,32 @@ class GPT2MLP(nn.Module):
         hidden_states = self.c_fc(hidden_states)
         hidden_states = self.act(hidden_states)
         #TODO: sparsity
-        zero_neuron = 0
-        for one in hidden_states:
-            for second in one:
-                for neuron in second:
-                    if neuron == 0:
-                        zero_neuron += 1
-        zero_neuron_per = zero_neuron / (hidden_states.size()[1] * hidden_states.size()[0] * hidden_states.size()[2])
-        if len(self.example_list[self.num_example]) == NUM_LAYER:
-            self.num_example += 1
-            self.example_list.append([])
-        self.example_list[self.num_example].append(zero_neuron_per)
-        if self.num_example == NUM_EXAM-1 and len(self.example_list[self.num_example]) == NUM_LAYER: # TODO: change based on size and num_example
-            res = [ele for ele in self.example_list if ele != []]
-            #print(res)
-            avg_list = []
-            avg = 0
-            for j in range(0,NUM_LAYER):
-                sum = 0
-                for i in range(0,NUM_EXAM):
-                    sum += res[i][j]
-                    # print(res[i][j])
-                    # print('/n')
-                avg = sum/(NUM_EXAM)
-                avg_list.append(avg)
-            for i in avg_list:
-                print(i)
+        # zero_neuron = 0
+        # for one in hidden_states:
+        #     for second in one:
+        #         for neuron in second:
+        #             if neuron == 0:
+        #                 zero_neuron += 1
+        # zero_neuron_per = zero_neuron / (hidden_states.size()[1] * hidden_states.size()[0] * hidden_states.size()[2])
+        # if len(self.example_list[self.num_example]) == NUM_LAYER:
+        #     self.num_example += 1
+        #     self.example_list.append([])
+        # self.example_list[self.num_example].append(zero_neuron_per)
+        # if self.num_example == NUM_EXAM-1 and len(self.example_list[self.num_example]) == NUM_LAYER: # TODO: change based on size and num_example
+        #     res = [ele for ele in self.example_list if ele != []]
+        #     #print(res)
+        #     avg_list = []
+        #     avg = 0
+        #     for j in range(0,NUM_LAYER):
+        #         sum = 0
+        #         for i in range(0,NUM_EXAM):
+        #             sum += res[i][j]
+        #             # print(res[i][j])
+        #             # print('/n')
+        #         avg = sum/(NUM_EXAM)
+        #         avg_list.append(avg)
+        #     for i in avg_list:
+        #         print(i)
         hidden_states = self.c_proj(hidden_states)
         hidden_states = self.dropout(hidden_states)
         return hidden_states, self.example_list, self.num_example
