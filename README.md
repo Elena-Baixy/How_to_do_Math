@@ -1,9 +1,4 @@
-# Sparsity and Activation
-
-Download requirements through
-```
-pip install -r requirements.txt
-```
+# How to do Math Problems
 
 
 ## Test Activation
