@@ -1,5 +1,5 @@
 # How to do Math Problems
-Check our poster: https://github.com/Elena-Baixy/How_to_do_Math/poster.pdf
+Check our poster: [https://github.com/Elena-Baixy/How_to_do_Math/poster.pdf](https://github.com/Elena-Baixy/How_to_do_Math/blob/main/poster.pdf)
 
 ## Test residual stream
 
